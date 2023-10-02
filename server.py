@@ -48,6 +48,7 @@ class MyWebServer (socketserver.BaseRequestHandler):
     path = ""
     cssPath = ""
     method = ""
+    fullpath = ""
 
     def handle(self):
         self.data = self.request.recv(1024).strip()
@@ -61,8 +62,8 @@ class MyWebServer (socketserver.BaseRequestHandler):
         #check method, if not GET/HEADER, return 405
         isValid = self.validateMethod()
 
-        pathstr = self.getFile(self.path)
-        print(pathstr)
+        file = self.getFile(self.path)
+        print(file)
 
         if not isValid:
             #Return 405 error
@@ -79,7 +80,7 @@ class MyWebServer (socketserver.BaseRequestHandler):
 
         #return finalized response
         if not self.responseSent:
-            self.assembleResponse(self.returnCode)
+            self.assembleResponse(self.returnCode,file)
         
 
         
@@ -159,6 +160,7 @@ class MyWebServer (socketserver.BaseRequestHandler):
             print("filepath: "+ filepath)
             isFile=True
         
+        self.fullpath = filepath
         try:
             if _debug:print("Getting file:" + filepath)
             f = open(filepath,"r",encoding="utf-8")
@@ -177,6 +179,7 @@ class MyWebServer (socketserver.BaseRequestHandler):
     
     def getCSS(self,path:str):
         basepath = "www"
+        print(path)
 
         if (path == "/"):
             try:
@@ -208,20 +211,32 @@ class MyWebServer (socketserver.BaseRequestHandler):
         
     
     #assemble response based on response code and file to open
-    def assembleResponse(self,returnCode:str):
+    def assembleResponse(self,returnCode:str, file=None):
         if _debug:print(self.returnCode)
 
         #Content-Type: text/html, text/css
         #if self.path
+
+        response = ""
         content = ""
 
-        
+        if ".html" in self.fullpath:
+            content = "text/html"
+        elif ".css" in self.fullpath:
+            content = "text/css"
 
         #if main file is html, also return css
         #if base dir, get base.css otherwise get deep.css
         self.getCSS(self.cssPath)
 
-        self.request.sendall(bytearray((self.returnCode+"\r\n"+"Content-Type: "+content),'utf-8'))
+        response = self.returnCode+"\r\n"+"Content-Type: "+content+"\r\n"
+        if file != None:
+            response += "\r\n"
+            response += file.read()
+
+        print(response)
+
+        self.request.sendall(bytearray(response,'utf-8'))
 
         return None
         
