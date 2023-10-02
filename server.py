@@ -1,5 +1,5 @@
 #  coding: utf-8 
-import socketserver
+
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -25,6 +25,8 @@ import socketserver
 # run: python freetests.py
 
 # try: curl -v -X GET http://127.0.0.1:8080/
+
+import socketserver
 import requests
 
 
@@ -39,14 +41,19 @@ import requests
 _debug = True
 
 class MyWebServer (socketserver.BaseRequestHandler):
-    returnCode: str = "200"
+    responseSent = False
+
+    returnCode: str = "200 OK"
     dataList = []
     path = ""
+    cssPath = ""
     method = ""
 
     def handle(self):
         self.data = self.request.recv(1024).strip()
         print ("Got a request of: %s\n" % self.data)
+
+        #check if request is empty
         
         #decode bytestring, set method and filepath vars
         self.decodeData()
@@ -54,8 +61,12 @@ class MyWebServer (socketserver.BaseRequestHandler):
         #check method, if not GET/HEADER, return 405
         isValid = self.validateMethod()
 
+        pathstr = self.getFile(self.path)
+        print(pathstr)
+
         if not isValid:
             #Return 405 error
+            self.returnCode = "405 Method Not allowed"
             isValid = False
 
 
@@ -67,8 +78,11 @@ class MyWebServer (socketserver.BaseRequestHandler):
         #set mime-types for files
 
         #return finalized response
+        if not self.responseSent:
+            self.assembleResponse(self.returnCode)
+        
 
-        self.request.sendall(bytearray("OK",'utf-8'))
+        
 
     def decodeData(self):
         #splits up data into a list
@@ -111,14 +125,103 @@ class MyWebServer (socketserver.BaseRequestHandler):
 
         return isValid
     
-    def getFile(self):
+    def getFile(self,path:str):
         #try to get file at file path, if fails, handle error correctly
-        try:
-            #get the file
-        except HTTPError as e:
-        
-        else:
+        basepath = "www"
+        filepath = basepath + path
 
+        #check if ends with index.html, any other file ignored as it gives 404
+        isFile = False
+
+        filesplit = filepath.split("/")
+        print("LAST SPLIT: "+filesplit[len(filesplit)-1])
+
+        #check if last split has dot to indicate filename
+        if "." in filesplit[len(filesplit)-1]:
+            isFile = True
+        
+        if (not isFile and filepath[len(filepath)-1] != '/'):
+            if _debug:print("301: Invalid Filepath")
+            returnCode = "301 Moved Permanently"
+            filepath += '/'
+
+        if not isFile:
+            self.cssPath = filepath
+        else:
+        
+            self.cssPath = (filepath.strip(filesplit[len(filesplit)-1]))
+            print("cssPath:"+self.cssPath)
+        
+        if not isFile:
+            #add index.html to filestring if not already present
+            if _debug:print("Index not given")
+            filepath += "index.html"
+            print("filepath: "+ filepath)
+            isFile=True
+        
+        try:
+            if _debug:print("Getting file:" + filepath)
+            f = open(filepath,"r",encoding="utf-8")
+        except:
+            #return status 404
+            print("File not found at:"+filepath)
+            self.returnCode = "404 Not Found"
+
+        else:
+            
+            #f.close()
+            return f
+        
+
+        return None
+    
+    def getCSS(self,path:str):
+        basepath = "www"
+
+        if (path == "/"):
+            try:
+                if _debug:print("Getting file:" + path)
+                f = open(basepath + "/base.css","r",encoding="utf-8")
+            except:
+                #return status 404
+                print("File not found at:"+ path)
+
+            else:
+                #f.close()
+                return f
+        else:
+            try:
+                if _debug:print("Getting file:" + path)
+                f = open(basepath + "deep.css","r",encoding="utf-8")
+            except:
+                #return status 404
+                print("File not found at:"+ path)
+
+            else:
+                #f.close()
+                return f
+
+
+        return None
+
+
+        
+    
+    #assemble response based on response code and file to open
+    def assembleResponse(self,returnCode:str):
+        if _debug:print(self.returnCode)
+
+        #Content-Type: text/html, text/css
+        #if self.path
+        content = ""
+
+        
+
+        #if main file is html, also return css
+        #if base dir, get base.css otherwise get deep.css
+        self.getCSS(self.cssPath)
+
+        self.request.sendall(bytearray((self.returnCode+"\r\n"+"Content-Type: "+content),'utf-8'))
 
         return None
         
@@ -133,4 +236,5 @@ if __name__ == "__main__":
 
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
+    if _debug:print("Running server...")
     server.serve_forever()
